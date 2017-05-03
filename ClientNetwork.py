@@ -29,6 +29,7 @@ import pickle
 import time
 import ClientH
 import ClientC
+import ClientF
 import Display
 
 INIT = 0
@@ -46,7 +47,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--computer_opponent", help="computer opponent is desired", action="store_true")
     parser.add_argument("-r", "--remote_opponent", help="remote opponent is desired", action="store_true")
+    parser.add_argument("-f", "--forgiving", help="warnings for invalid moves", action="store_true")
     args = parser.parse_args()
+
+    if args.computer_opponent and args.remote_opponent:
+        print("Cannot have both computer and remote opponents!")
+        exit(0)
 
     opponent_is_computer = False
 
@@ -63,10 +69,13 @@ def main():
     sock.connect((host, port))
 
     opponent_is_remote = False
+    single_local_player_number = 0
 
     if args.remote_opponent:
         resp = [INIT, True]
         opponent_is_remote = True
+        print("Waiting for opponent...")
+        print("")
     else:
         resp = [INIT, False]
 
@@ -74,13 +83,17 @@ def main():
 
     msg_in = sock.recv(1024)
     msg = pickle.loads(msg_in)
+    game_id = msg[2]
 
     if msg[0] != 0:
         print("Received unexpected message from server. Quitting.")
         exit(0)
+    elif args.forgiving:
+        client1 = ClientF.ClientF(msg[1])
     else:
         client1 = ClientH.ClientH(msg[1])
-        client1.initialize()
+
+    client1.initialize()
 
     if opponent_is_computer:
         client2 = ClientC.ClientC(2)
@@ -89,42 +102,65 @@ def main():
         client2 = ClientH.ClientH(2)
         client2.initialize()
 
+    print("Welcome to Game #" + str(game_id))
+    if opponent_is_remote:
+        single_local_player_number = msg[3]
+        print("You are Player " + str(msg[3]))
+    print("")
+
     display.show_board(client1.board.get_grid())
     print("")
 
+    if opponent_is_remote and msg[1] == 2:
+        print("Waiting for Player 1's move...")
+        print("")
+
     while 1:
-        # print("**Waiting for server message**")
         msg_in = sock.recv(1024)
         msg = pickle.loads(msg_in)
-        # print("**Received server message**")
         if msg[0] == P1_MOVE_REQ:
-            print("Player 1's turn.")
+            print("Player 1's turn (x).")
             print("Enter piece and destination coordinates, row before column, separated by a space: ")
             l = client1.next_move()
+            if l[0].lower() == "q":
+                resp = [QUIT_MESS]
+                time.sleep(0.5)
+                sock.sendall(pickle.dumps(resp))
+                continue
             a = []
             translate(l, a, cols)
             resp = [P1_MOVE_REQ, a]
-            time.sleep(1)
+            time.sleep(0.5)
             sock.sendall(pickle.dumps(resp))
         elif msg[0] == P2_MOVE_REQ:
-            # print("**Received request for p2 move**")
             if not opponent_is_computer:
-                print("Player 2's turn.")
+                print("Player 2's turn (o).")
                 print("Enter piece and destination coordinates, row before column, separated by a space: ")
             a = []
             if client1.get_num() == 2:
                 l = client1.next_move()
+                if l[0].lower() == "q":
+                    resp = [QUIT_MESS]
+                    time.sleep(0.5)
+                    sock.sendall(pickle.dumps(resp))
+                    continue
             else:
                 if opponent_is_computer:
+                    print("Computer's turn.")
                     resp = [P2_MOVE_REQ, client2.next_move()]
-                    time.sleep(1)
+                    time.sleep(0.1)
                     sock.sendall(pickle.dumps(resp))
                     continue
                 else:
                     l = client2.next_move()
+                    if l[0].lower() == "q":
+                        resp = [QUIT_MESS]
+                        time.sleep(0.5)
+                        sock.sendall(pickle.dumps(resp))
+                        continue
             translate(l, a, cols)
             resp = [P2_MOVE_REQ, a]
-            time.sleep(1)
+            time.sleep(0.5)
             sock.sendall(pickle.dumps(resp))
         elif msg[0] == P1_MOVE_WAS:
             client1.move_was(1, msg[1])
@@ -135,6 +171,9 @@ def main():
             print("")
             display.show_board(client1.board.get_grid())
             print("")
+            if opponent_is_remote and single_local_player_number == 1:
+                print("Waiting for Player 2's move...")
+                print("")
         elif msg[0] == P2_MOVE_WAS:
             client1.move_was(2, msg[1])
             if not opponent_is_remote:
@@ -148,8 +187,13 @@ def main():
             print("")
             display.show_board(client1.board.get_grid())
             print("")
+            if opponent_is_remote and single_local_player_number == 2:
+                print("Waiting for Player 1's move...")
+                print("")
         elif msg[0] == WIN_MESS or msg[0] == ERR_MESS or msg[0] == QUIT_MESS:
-            # TODO show final move and updated board if win
+            if msg[0] == WIN_MESS:
+                display.show_board(msg[2])
+                print("")
             print(msg[1])
             break
         else:
@@ -175,7 +219,7 @@ def translate(l, a, c):
         if l[1].lower() == chr(j):
             a.append(j - 97)
             break
-        elif j == (97 + c):
+        elif j == (96 + c):
             return False
     try:
         i = int(l[2])
@@ -186,12 +230,17 @@ def translate(l, a, c):
         if l[3].lower() == chr(j):
             a.append(j - 97)
             break
-        elif j == (97 + c):
+        elif j == (96 + c):
             return False
     return True
 
 
 def untranslate(a):
+    """
+    Returns row numbers to letters for readability
+    :param a: list of number-only coordinates
+    :return: coordinate string where rows are letters
+    """
     return str(a[0]) + str(chr(65 + a[1])) + " to " + str(a[2]) + str(chr(65 + a[3]))
 
 
