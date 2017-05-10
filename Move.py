@@ -2,6 +2,7 @@
 Lines of Action Move class
 Starbuck Beagley
 """
+ERR_MESS = 6
 
 
 class Move:
@@ -35,7 +36,7 @@ class Move:
         message = self.legal_move(p, r1, c1, r2, c2)
         player_piece = p.get_piece()
         if message != "Legal":
-            tup = (0, message)
+            tup = [ERR_MESS, message]
             return tup
         else:
             lost_piece = ""
@@ -49,7 +50,7 @@ class Move:
             self.board.get_grid()[r2][c2] = player_piece
             m = "Moved " + str(p) + "'s piece from " + str(r1) + self.num_to_let(c1) \
                 + " to " + str(r2) + self.num_to_let(c2) + lost_piece
-            tup = (1, m)
+            tup = [1, m]
             return tup
 
     @staticmethod

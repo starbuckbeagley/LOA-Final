@@ -1,46 +1,24 @@
 """
 Lines of Action forgiving human client
+Extends SuperClient
 Warns player about invalid moves
+
 Starbuck Beagley
-
 """
+from SuperClient import SuperClient
 
-import Player
-import Board
-import Move
+ORD_A_LOWER = 97
+COLS = 8
 
 
-class ClientF:
+class ClientF(SuperClient):
 
     def __init__(self, num):
         """
         Constructor
         :param num: player number
         """
-        self.rows = 8
-        self.cols = 8
-        self.player = Player.Player(num)
-        if num == 1:
-            self.opponent = Player.Player(2)
-            self.board = Board.Board(self.rows, self.cols, self.player, self.opponent)
-            self.move = Move.Move(self.board, self.player, self.opponent)
-        else:
-            self.opponent = Player.Player(1)
-            self.board = Board.Board(self.rows, self.cols, self.opponent, self.player)
-            self.move = Move.Move(self.board, self.opponent, self.player)
-
-    def initialize(self):
-        """
-        Initializes client
-        """
-        self.board.reset_board()
-
-    def get_num(self):
-        """
-        Gets player number
-        :return: player number
-        """
-        return self.player.get_number()
+        SuperClient.__init__(self, num)
 
     def next_move(self):
         """
@@ -52,7 +30,7 @@ class ClientF:
             a = []
             if l[0].lower() == "q":
                 return l
-            elif not translate(l, a, 8):
+            elif not translate(l, a, COLS):
                 print("\nIllegal move format.\n")
                 print("Player " + str(self.player.get_number()) + "'s turn (" + self.player.get_piece() + ").")
                 print("Enter piece and destination coordinates, row before column, separated by a space: ")
@@ -64,17 +42,6 @@ class ClientF:
                     print("\n" + move_check + "\n")
                     print("Player " + str(self.player.get_number()) + "'s turn (" + self.player.get_piece() + ").")
                     print("Enter piece and destination coordinates, row before column, separated by a space: ")
-
-    def move_was(self, p, move):
-        """
-        Applies last move to local board object
-        :param p: player who moved
-        :param move: player's move
-        """
-        if p == self.player.get_number():
-            self.move.make_move(self.player, move[0], move[1], move[2], move[3])
-        else:
-            self.move.make_move(self.opponent, move[0], move[1], move[2], move[3])
 
 
 def translate(l, a, c):
@@ -90,21 +57,21 @@ def translate(l, a, c):
         a.append(i)
     except ValueError:
         return False
-    for j in range(97, 97 + c):
+    for j in range(ORD_A_LOWER, ORD_A_LOWER + c):
         if l[1].lower() == chr(j):
-            a.append(j - 97)
+            a.append(j - ORD_A_LOWER)
             break
-        elif j == (96 + c):
+        elif j == (ORD_A_LOWER + c - 1):
             return False
     try:
         i = int(l[2])
         a.append(i)
     except ValueError:
         return False
-    for j in range(97, 97 + c):
+    for j in range(ORD_A_LOWER, ORD_A_LOWER + c):
         if l[3].lower() == chr(j):
-            a.append(j - 97)
+            a.append(j - ORD_A_LOWER)
             break
-        elif j == (96 + c):
+        elif j == (ORD_A_LOWER + c - 1):
             return False
     return True
