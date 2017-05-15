@@ -37,8 +37,18 @@ def get_computer_move(player, move):
     :param move: Move object, checks move legality
     :return: computer's move
     """
-    for r1 in range(0, ROWS):
-        for c1 in range(0, COLS):
+    row_list = []
+    col_list = []
+    for i in range(0, int((ROWS / 2))):
+        r = [i, (ROWS - i)]
+        random.shuffle(r)
+        for j in range(0, 2):
+            row_list.append(r[j])
+        random.shuffle(r)
+        for j in range(0, 2):
+            col_list.append(r[j])
+    for r1 in row_list:
+        for c1 in col_list:
             for r2 in range(MID1, MID2 + 1):
                 for c2 in range(MID1, MID2 + 1):
                     if move.legal_move(player, r1, c1, r2, c2) == "Legal":

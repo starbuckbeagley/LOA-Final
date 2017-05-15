@@ -54,7 +54,16 @@ def main():
         client_socket1, addr1 = server_socket.accept()
         print("Got connection from %s" % str(addr1))
 
-        msg_in1 = client_socket1.recv(BUFF_SIZE)
+        try:
+            msg_in1 = client_socket1.recv(BUFF_SIZE)
+        except (OSError, EOFError) as err:
+            print("Game #" + str(game_id) + ": Error: " + err.strerror + ".")
+            try:
+                client_socket1.sendall(pickle.dumps([ERR_MESS, err.strerror]))
+                client_socket1.close()
+            except OSError:
+                pass
+            continue
         msg = pickle.loads(msg_in1)
 
         if msg[0] == INIT:
@@ -73,6 +82,9 @@ def main():
                 threads.append(ClientThread(game_id, client_socket1, None))
                 threads[len(threads) - 1].start()
                 game_id += 1
+        elif msg[0] == QUIT_MESS:
+            print("Server remotely shut down.")
+            break
         else:
             err_msg = "Server needs to know if player 2 is remote. Passing."
             print(err_msg)
@@ -114,14 +126,14 @@ def run_game(game_id, client_socket1, client_socket2):
         remote_player = True
         try:
             client_socket2.sendall(pickle.dumps(game_server.initialize_client(P2, game_id)))
-        except OSError as err:
+        except (OSError, EOFError) as err:
             game_error(game_server, client_socket1, client_socket2,
-                       P2, err.strerror, remote_player, game_id)
+                       P2, err.strerror, game_id)
     try:
         client_socket1.sendall(pickle.dumps(game_server.initialize_client(P1, game_id)))
-    except OSError as err:
+    except (OSError, EOFError) as err:
         game_error(game_server, client_socket1, client_socket2,
-                   P1, err.strerror, remote_player, game_id)
+                   P1, err.strerror, game_id)
 
     while 1:
         if current_player == P1:
@@ -141,7 +153,7 @@ def run_game(game_id, client_socket1, client_socket2):
                     break
             elif msg1[0] == ERR_MESS:
                 game_error(game_server, client_socket1, client_socket2,
-                           current_player, msg1[1], remote_player, game_id)
+                           current_player, msg1[1], game_id)
                 break
             else:
                 print("Game #" + str(game_id) + ": Got unexpected message from player 1. Disconnecting.")
@@ -166,10 +178,10 @@ def run_game(game_id, client_socket1, client_socket2):
                     break
                 elif msg2[0] == ERR_MESS:
                     game_error(game_server, client_socket1, client_socket2,
-                               current_player, msg2[1], remote_player, game_id)
+                               current_player, msg2[1], game_id)
             elif msg2[0] == ERR_MESS:
                 game_error(game_server, client_socket1, client_socket2,
-                           current_player, msg2[1], remote_player, game_id)
+                           current_player, msg2[1], game_id)
                 break
             else:
                 print("Game #" + str(game_id) + ": Got unexpected message from player 2. Disconnecting.")
@@ -191,7 +203,7 @@ def get_move(game_server, client_socket, client_id, game_id):
     time.sleep(TIME_DELAY)
     try:
         client_socket.sendall(pickle.dumps(game_server.request_move(client_id)))
-    except OSError as err:
+    except (OSError, EOFError) as err:
         return [ERR_MESS, err.strerror]
     print("Game #" + str(game_id) + ": Waiting for response from Player " + str(client_id) + ".")
     try:
@@ -200,7 +212,7 @@ def get_move(game_server, client_socket, client_id, game_id):
         end_time = time.time()
         if (end_time - start_time) > MAX_MOVE_TIME:
             return [ERR_MESS, "Player " + str(client_id) + " timed out"]
-    except OSError as err:
+    except (OSError, EOFError) as err:
         return [ERR_MESS, err.strerror]
     print("Game #" + str(game_id) + ": Received response from Player " + str(client_id) + ".")
     return pickle.loads(msg_in)
@@ -223,31 +235,32 @@ def player_turn(game_server, client_socket1, client_socket2, current_player, rem
         time.sleep(TIME_DELAY)
         try:
             client_socket1.sendall(pickle.dumps(game_server.send_error(current_player, try_move[1])))
-        except OSError as err:
+        except (OSError, EOFError) as err:
             return [ERR_MESS, err.strerror]
         if remote_player:
             time.sleep(0.1)
             try:
                 client_socket2.sendall(pickle.dumps(game_server.send_error(current_player, try_move[1])))
-            except OSError as err:
+            except (OSError, EOFError) as err:
                 return [ERR_MESS, err.strerror]
         print("Game #" + str(game_id) + ": Illegal move from player " + str(current_player) + ". Disconnecting.")
         close_sockets(client_socket1, client_socket2)
         return END_GAME
     else:
-        if game_server.check_win(current_player):
+        player_won = game_server.check_win()
+        if player_won:
             time.sleep(TIME_DELAY)
             try:
-                client_socket1.sendall(pickle.dumps(game_server.send_win(current_player)))
-            except OSError as err:
+                client_socket1.sendall(pickle.dumps(game_server.send_win(player_won)))
+            except (OSError, EOFError) as err:
                 return [ERR_MESS, err.strerror]
             if remote_player:
                 time.sleep(0.1)
                 try:
-                    client_socket2.sendall(pickle.dumps(game_server.send_win(current_player)))
-                except OSError as err:
+                    client_socket2.sendall(pickle.dumps(game_server.send_win(player_won)))
+                except (OSError, EOFError) as err:
                     return [ERR_MESS, err.strerror]
-            print("Game #" + str(game_id) + ": " + "Player " + str(current_player) + " wins!")
+            print("Game #" + str(game_id) + ": " + "Player " + str(player_won) + " wins!")
             close_sockets(client_socket1, client_socket2)
             return END_GAME
         else:
@@ -258,12 +271,12 @@ def player_turn(game_server, client_socket1, client_socket2, current_player, rem
                 move_was = P2_MOVE_WAS
             try:
                 client_socket1.sendall(pickle.dumps(game_server.send_move(move_was, msg)))
-            except OSError as err:
+            except (OSError, EOFError) as err:
                 return [ERR_MESS, err.strerror]
             if remote_player:
                 try:
                     client_socket2.sendall(pickle.dumps(game_server.send_move(move_was, msg)))
-                except OSError as err:
+                except (OSError, EOFError) as err:
                     return [ERR_MESS, err.strerror]
         return CONTINUE_GAME
 
@@ -285,11 +298,7 @@ def client_quit(game_server, client_socket1, client_socket2, client_id, game_id)
     close_sockets(client_socket1, client_socket2)
 
 
-def player_timed_out():
-    pass
-
-
-def game_error(game_server, client_socket1, client_socket2, client_num, err_str, remote_player, game_id):
+def game_error(game_server, client_socket1, client_socket2, client_num, err_str, game_id):
     """
     Sends message to client if error occurs, closes sockets
     :param game_server: game server object

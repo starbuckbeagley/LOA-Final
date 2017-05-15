@@ -21,6 +21,10 @@ QUIT_MESS = 7
 ROWS = 8
 COLS = 8
 
+NO_WIN = 0
+P1_WIN = 1
+P2_WIN = 2
+
 ORD_A_LOWER = 97
 
 
@@ -110,11 +114,13 @@ class LOAServer(AbstractServer):
         win_str = "Player " + str(winner) + " wins!"
         return [WIN_MESS, win_str, self.board.get_grid()]
 
-    def check_win(self, current_player):
-        if current_player == self.player1.get_number():
-            return self.move.check_for_win(self.player1)
+    def check_win(self):
+        if self.move.check_for_win(self.player1):
+            return P1_WIN
+        elif self.move.check_for_win(self.player2):
+            return P2_WIN
         else:
-            return self.move.check_for_win(self.player2)
+            return NO_WIN
 
 
 def translate(l, a, c):
